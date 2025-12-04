@@ -3,13 +3,18 @@ import urllib.request
 import xmltodict
 import pandas as pd
 import ssl
+from dotenv import load_dotenv
+import os
 from Document import Document
 from Author import Author
+
+load_dotenv()
+
 # 3 VERSIONS A RENDRE POUR JANVIER 1) JUSQUAU TD 5 2) JUSQUAU TD 10 3) PROJET FINAL
 reddit = praw.Reddit(
-    client_id='ag4KNe12bqjztncUW3zlRw',
-    client_secret='bMJ0U_O5MgI-XV0MAcL-AfRicGCRNA',
-    user_agent='WebScraping'
+    client_id=os.getenv("REDDIT_CLIENT_ID"),
+    client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+    user_agent=os.getenv("REDDIT_USER_AGENT")
 )
 
 documents = {}
