@@ -1,125 +1,104 @@
 import praw
 import urllib.request
+import urllib.parse
 import xmltodict
-import pandas as pd
 import ssl
-from dotenv import load_dotenv
 import os
-from Document import Document
-from Author import Author
+from dotenv import load_dotenv
+
+from Corpus import Corpus
+from RedditDocument import RedditDocument
+from ArxivDocument import ArxivDocument
 
 load_dotenv()
 
-# 3 VERSIONS A RENDRE POUR JANVIER 1) JUSQUAU TD 5 2) JUSQUAU TD 10 3) PROJET FINAL
+mon_corpus = Corpus("Mon corpus")
+
+print("Chargement des données Reddit")
+
 reddit = praw.Reddit(
     client_id=os.getenv("REDDIT_CLIENT_ID"),
     client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
     user_agent=os.getenv("REDDIT_USER_AGENT")
 )
 
-documents = {}
-authors = {}
-id_doc = 1
-
 theme = 'climate'
-hot_posts = reddit.subreddit(theme).hot(limit=10)
+posts = reddit.subreddit(theme).hot(limit=10)
 
-for post in hot_posts:
-    doc = Document(
+for post in posts:
+    if post.selftext:
+        contenu = post.selftext
+    else:
+        contenu = post.title
+    
+    if len(contenu) < 100:
+        continue
+
+    doc = RedditDocument(
         titre=post.title,
         auteur=str(post.author),
         date=str(post.created_utc),
         url=post.url,
-        texte=post.selftext if post.selftext else post.title
+        texte=contenu,
+        nb_comments=post.num_comments
     )
-    documents[id_doc] = doc
 
-    auteur_nom = doc.auteur
-    if auteur_nom not in authors:
-        authors[auteur_nom] = Author(auteur_nom)
-    authors[auteur_nom].add(id_doc, doc)
+    print(f"Récupération Reddit : {doc.titre[:50]}")
+    mon_corpus.add_document(doc)
 
-    id_doc += 1
+print("Chargement des données Arxiv")
 
-print(f"Nombre de documents Reddit : {len(documents)}")
-
-query = 'electron'
-encoded_query = urllib.parse.quote(query)
-url = f"http://export.arxiv.org/api/query?search_query=all:{encoded_query}&start=0&max_results=10"
+mot_cle = 'electron'
+mot_cle_encode = urllib.parse.quote(mot_cle)
+url = f"http://export.arxiv.org/api/query?search_query=all:{mot_cle_encode}&start=0&max_results=10"
 
 context = ssl._create_unverified_context()
 data = urllib.request.urlopen(url, context=context).read().decode('utf-8')
-parseData = xmltodict.parse(data)
+dico_xml = xmltodict.parse(data)
 
-if "entry" in parseData["feed"]:
-    entries = parseData["feed"]["entry"]
-    entries = entries if isinstance(entries, list) else [entries]
+if "entry" in dico_xml["feed"]:
+    entries = dico_xml["feed"]["entry"]
+    
+    if not isinstance(entries, list):
+        entries = [entries]
 
     for entry in entries:
-        auteur_info = entry['author']
-        if type(auteur_info) == list:
-            auteur = auteur_info[0]['name']
-        else:
-            auteur = auteur_info['name']
+        contenu = entry['summary']
 
-        doc = Document(
+        if len(contenu) < 100:
+            continue
+
+        info_auteur = entry['author']
+        liste_co_auteurs = []
+        nom_auteur = "Inconnu"
+
+        if isinstance(info_auteur, list):
+            nom_auteur = info_auteur[0]['name']
+            for a in info_auteur[1:]:
+                liste_co_auteurs.append(a['name'])
+        else:
+            nom_auteur = info_auteur['name']
+
+        doc = ArxivDocument(
             titre=entry['title'],
-            auteur=auteur,
+            auteur=nom_auteur,
             date=entry['published'],
             url=entry['id'],
-            texte=entry['summary']
+            texte=contenu,
+            co_authors=liste_co_auteurs
         )
-        documents[id_doc] = doc
-
-        if auteur not in authors:
-            authors[auteur] = Author(auteur)
-        authors[auteur].add(id_doc, doc)
-
-        id_doc += 1
+        
+        print(f"Récupération Arxiv : {doc.titre[:50]}")
+        mon_corpus.add_document(doc)
 else:
-    print("Aucun résultat Arxiv trouvé pour cette requête.")
+    print("Aucun résultat trouvé sur Arxiv.")
 
-print(f"Nombre total de documents (Reddit + Arxiv) : {len(documents)}")
+print(f"Nombre de documents validés : {len(mon_corpus.documents)}")
+print(f"Nombre d'auteurs identifiés : {len(mon_corpus.authors)}")
 
-print("\nExemple d’un document :")
-un_doc = list(documents.values())[0]
-un_doc.afficher()
+mon_corpus.save("./data/corpus.csv")
 
-docs_list = []
-for doc_id, doc in documents.items():
-    docs_list.append({
-        "id": doc_id,
-        "titre": doc.titre,
-        "auteur": doc.auteur,
-        "date": doc.date,
-        "url": doc.url,
-        "texte": doc.texte
-    })
-
-# df_docs = pd.DataFrame(docs_list)
-# df_docs.to_csv("corpus.tsv", sep="\t", index=False)
-# print("\nCorpus sauvegardé dans 'corpus.tsv'")
-
-nom_recherche = input("\nEntrez le nom d'un auteur pour voir ses stats : ")
-
-if nom_recherche in authors:
-    author = authors[nom_recherche]
-    nb_docs = author.nb_docs
-    total_mots = 0
-    for doc in author.production.values():
-        nb_mots = len(doc.texte.split())
-    total_mots += nb_mots
-    taille_moyenne = total_mots / nb_docs if nb_docs > 0 else 0
-
-    print(f"Auteur : {author.name}")
-    print(f"Nombre de documents : {nb_docs}")
-    print(f"Taille moyenne des documents (en mots) : {taille_moyenne:.2f}")
-else:
-    print("Auteur non trouvé.")
-
-
-# exemple regex
-# motif = re.compile("python");
-# matches = motif.finditer(texte);
-# for m in matches:
-    # print(f"...")
+if len(mon_corpus.documents) > 0:
+    print("\nExemple du premier document :")
+    premier_doc = list(mon_corpus.documents.values())[0]
+    print(premier_doc)
