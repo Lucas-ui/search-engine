@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from Corpus import Corpus
 from RedditDocument import RedditDocument
 from ArxivDocument import ArxivDocument
+from SearchEngine import SearchEngine
 
 load_dotenv()
 
@@ -102,3 +103,16 @@ if len(mon_corpus.documents) > 0:
     print("\nExemple du premier document :")
     premier_doc = list(mon_corpus.documents.values())[0]
     print(premier_doc)
+
+mon_corpus.stats(n=5)
+
+moteur = SearchEngine(mon_corpus)
+
+mot = input("\nEntrez un mot à chercher (ex: climate, energy) : ")
+df_res = moteur.search(mot)
+
+if not df_res.empty:
+    print(f"\nRésultats pour '{mot}':")
+    print(df_res)
+else:
+    print("Aucun résultat trouvé.")
