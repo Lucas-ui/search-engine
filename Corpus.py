@@ -7,6 +7,7 @@ import re
 class Corpus:
     instance_unique = None
 
+    # Singleton, permet d'être sûr qu'il n'y a qu'une seule instance de Corpus
     def __new__(cls, nom):
         if cls.instance_unique is None:
             cls.instance_unique = super().__new__(cls)
@@ -19,6 +20,7 @@ class Corpus:
 
     def add_document(self, document):
         self.documents[self.id_document] = document
+        # On concatène tout le texte pour simplifier la recherche
         self.tout_le_texte += " " + document.texte
         
         nom = document.auteur
@@ -61,8 +63,10 @@ class Corpus:
         print(f"Sauvegardé dans {filename}")
 
     def load(self, filename="corpus.csv"):
+        # Récupération du csv avec Pandas
         df = pd.read_csv(filename, sep="\t")
         
+        # On réinitialise tout avant le chargement
         self.documents = {}
         self.authors = {}
         self.id_document = 0
@@ -70,6 +74,7 @@ class Corpus:
 
         for i, row in df.iterrows():
             
+            # Selon le type on crée le bon document avec les informations concernées
             if row["type"] == "Reddit":
                 doc = RedditDocument(
                     row["titre"], row["auteur"], row["date"], 
@@ -92,23 +97,28 @@ class Corpus:
     def nettoyer_texte(self, chaine):
         chaine = chaine.lower()
         chaine = chaine.replace('\n', ' ')
+        # Le regex signifie tout ce qui n'est pas une lettre ou un espace, on le remplace
         chaine = re.sub(r'[^a-z ]', ' ', chaine)
         return chaine
 
     def search(self, mot_cle):
         print("Recherche")
+        # Permet de trouver "Climat" même si on recherche "climat"
         matches = re.finditer(mot_cle, self.tout_le_texte, re.IGNORECASE)
         
         compteur = 0
         for match in matches:
             compteur = compteur + 1
             position_mot = match.start()
+            # On prend un contexte de 20 caractères avant et après
             debut_phrase = position_mot - 20
             fin_phrase = match.end() + 20
             
+            # Pour ne pas commencer avant le début du texte
             if debut_phrase < 0:
                 debut_phrase = 0
-                
+
+            # Récupère le texte présent entre debut_phrase et fin_phrase    
             passage = self.tout_le_texte[debut_phrase:fin_phrase]
             print("Trouvé : ... " + passage + " ...")
             
@@ -121,6 +131,7 @@ class Corpus:
         matches = re.finditer(expression, self.tout_le_texte, re.IGNORECASE)
         
         for match in matches:
+            # Découpage pour le tableau
             gauche = self.tout_le_texte[ match.start()-taille : match.start() ]
             centre = match.group()
             droite = self.tout_le_texte[ match.end() : match.end()+taille ]
@@ -141,6 +152,7 @@ class Corpus:
         
         liste_mots = texte_propre.split()
         
+        # Compte la fréquence des mots
         dico_compteur = {}
         for mot in liste_mots:
             if mot in dico_compteur:
@@ -148,6 +160,7 @@ class Corpus:
             else:
                 dico_compteur[mot] = 1
         
+        # Transformation en liste de dictionnaires pour Pandas
         liste_pour_pandas = []
         for mot in dico_compteur:
             nombre = dico_compteur[mot]
@@ -156,6 +169,7 @@ class Corpus:
             
         df = pd.DataFrame(liste_pour_pandas)
         
+        # Tri pour avoir les plus utilisés en premier
         df = df.sort_values(by="Frequence", ascending=False)
         
         print("Nombre de mots uniques : " + str(len(dico_compteur)))
